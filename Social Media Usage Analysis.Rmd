@@ -1,0 +1,191 @@
+---
+title: "Social Media Usage"
+author: "Rutwik Guntoorkar"
+date: "2023-04-23"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(readr)
+library(MVA)
+library(HSAUR2)
+library(SciViews)
+library(scatterplot3d)
+library(car)
+library(lattice)
+library(GGally)
+library(ggplot2)
+library(ggridges)
+library(ggvis)
+library(ggthemes)
+library(cowplot)
+library(gapminder)
+library(gganimate)
+library(dplyr)
+library(tidyverse)
+library(grid)
+library(gridExtra)
+library(RColorBrewer)
+library(Hotelling)
+library(stats)
+library(biotools)
+library(factoextra)
+library(FactoMineR)
+library(ggfortify)
+library(psych)
+library(corrplot)
+library(NbClust)
+library(caTools)
+library(pROC)
+library(caret)
+
+```
+
+```{r}
+stddata <- read_csv("/Users/rutwik/Desktop/RBS/Sem 2/Multivariate Analysis/Class_Survey.csv")
+str(stddata)
+stddata <- as.data.frame(stddata)
+data <- (stddata[,3:16])
+data <- (data[,-13])
+view(data)
+str(data)
+data$`Social Media Addiction` <- ifelse(data$`Social Media Addiction`=="Addicted",1,0)
+data <- na.omit(data)
+view(data)
+
+```
+
+
+```{r}
+cor.plot(data[,-13])
+
+```
+
+> #### Correlation plot shows us "Social media screen time" is highly correlated with WhatsApp, Instagram, Snapchat and Linkedin
+
+```{r}
+summary(data)
+boxplot(data[,-13])
+
+```
+
+### Principal Component Analysis:
+```{r}
+cor(data[,-13])
+data_pca <- prcomp(data[,-13],scale. = TRUE)
+
+data_pca
+summary(data_pca)
+
+```
+> #### Since prportion of Variance for PCA is not greater than 70%, we can't use PCA
+
+### Exploratory Factor Analysis
+```{r}
+fit.pc <- principal(data[,-13], nfactors = 6, rotate = "varimax")
+fit.pc
+fit.pc$scores
+
+fa.diagram(fit.pc)
+
+data_efa <- as.data.frame(fit.pc$scores)
+names(data_efa)
+data_efa <- data_efa[,-6]
+data_efa$C6 <- data$Messages
+data_efa
+
+set.seed(123)
+km.res <- kmeans(data_efa, 2, nstart = 25)
+# Visualize
+fviz_cluster(km.res, data = data_efa,
+             ellipse.type = "convex",
+             palette = "jco",
+             ggtheme = theme_minimal())
+
+
+```
+
+> ##### Based on the clusterplot above, we cannot infer anything
+
+```{r}
+set.seed(123)
+split = sample.split(data$`Social Media Addiction`, SplitRatio = 0.70)
+train_data = subset(data, split == TRUE)
+test_data = subset(data, split == FALSE)
+
+Xtrain_data <- train_data[,1:11]
+Ytrain_data <- train_data[,13]
+
+Xtest_data <- test_data[,1:11]
+
+x_data <- cbind(Xtrain_data,Ytrain_data)
+logistic_data <- glm(Ytrain_data ~ ., data = x_data,family='binomial')
+summary(logistic_data)
+```
+
+
+
+```{r}
+
+probabilities_data <- predict(logistic_data, newdata = Xtest_data, type = "response")
+
+predicted_data <- ifelse(probabilities_data > 0.5, "Yes", "No")
+actual_data <- ifelse(test_data$`Social Media Addiction` == 1, "Yes", "No")
+confusion_data <- table(predicted_data, actual_data)
+confusion_data
+
+#Finding out accuracy precision and Recall
+
+accuracy <- sum(diag(confusion_data)) / sum(confusion_data)
+precision <- confusion_data[2, 2] / sum(confusion_data[, 2])
+recall <- confusion_data[2, 2] / sum(confusion_data[2, ])
+cat("Accuracy:", round(accuracy, 3), "\n")
+cat("Precision:", round(precision, 3), "\n")
+cat("Recall:", round(recall, 3), "\n")
+
+```
+
+
+
+```{r}
+roc_data <- roc(test_data$`Social Media Addiction`, probabilities_data)
+auc_data <- auc(roc_data)
+
+print(ggroc(roc_data, color = "blue", legacy.axes = TRUE) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(x = "False Positive Rate", y = "True Positive Rate",
+       title = paste("ROC Curve (AUC = ", round(auc_data, 2), ")")) +
+  annotate("text", x = 0.5, y = 0.5, label = paste0("AUC = ", round(auc_data, 2))))
+
+```
+
+
+```{r}
+logistic_1 <- glm(Ytrain_data ~ Instagram + Snapchat + Twitter + Linkedin + Messages , data = x_data,family='binomial')
+summary(logistic_1)
+
+
+probabilities_1 <- predict(logistic_1, newdata = Xtest_data, type = "response")
+
+predicted_1 <- ifelse(probabilities_1 > 0.5, "Yes", "No")
+actual_1 <- ifelse(test_data$`Social Media Addiction` == 1, "Yes", "No")
+confusion_1 <- table(predicted_1, actual_1)
+confusion_1
+
+roc_1 <- roc(test_data$`Social Media Addiction`, probabilities_1)
+auc_1 <- auc(roc_1)
+
+
+print(ggroc(roc_1, color = "blue", legacy.axes = TRUE) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(x = "False Positive Rate", y = "True Positive Rate",
+       title = paste("ROC Curve (AUC = ", round(auc_1, 2), ")")) +
+  annotate("text", x = 0.5, y = 0.5, label = paste0("AUC = ", round(auc_1, 2))))
+```
+
